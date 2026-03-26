@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BTC Portfolio — Contable v2.0</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #050a0e;
+    --bg2: #0a1520;
+    --bg3: #0f1f2e;
+    --border: #1a3a52;
+    --border2: #234d6a;
+    --gold: #f5a623;
+    --gold2: #ffd166;
+    --green: #00e5a0;
+    --red: #ff4d6d;
+    --yellow: #ffd166;
+    --blue: #38bdf8;
+    --text: #e2f0fa;
+    --muted: #6b8fa8;
+    --card: #0d1e2d;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  /* GRID NOISE OVERLAY */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(56,189,248,0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(56,189,248,0.02) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .wrap { max-width: 1440px; margin: 0 auto; padding: 0 32px; position: relative; z-index: 1; }
+
+  /* ── HEADER ── */
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 20px 0;
+    background: rgba(5,10,14,0.95);
+    position: sticky; top: 0; z-index: 100;
+    backdrop-filter: blur(12px);
+  }
+  .header-inner {
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .logo {
+    display: flex; align-items: center; gap: 12px;
+  }
+  .logo-icon {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, var(--gold), var(--gold2));
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Syne', sans-serif;
+    font-weight: 800; font-size: 16px; color: #000;
+  }
+  .logo-text { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 18px; letter-spacing: -0.5px; }
+  .logo-sub { color: var(--muted); font-size: 11px; margin-top: -2px; }
+  .header-status {
+    display: flex; align-items: center; gap: 8px;
+    color: var(--green); font-size: 11px;
+  }
+  .pulse {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--green);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%,100% { opacity:1; box-shadow: 0 0 0 0 rgba(0,229,160,0.4); }
+    50% { opacity:.7; box-shadow: 0 0 0 6px rgba(0,229,160,0); }
+  }
+  .price-display {
+    font-family: 'Syne', sans-serif;
+    font-size: 15px; font-weight: 700;
+    color: var(--gold);
+  }
+
+  /* ── MAIN GRID ── */
+  main { padding: 32px 0; }
+
+  /* ── KPI ROW ── */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+  .kpi {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 22px;
+    transition: border-color .2s, transform .2s;
+    position: relative; overflow: hidden;
+  }
+  .kpi::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+    opacity: 0;
+    transition: opacity .3s;
+  }
+  .kpi:hover { border-color: var(--border2); transform: translateY(-2px); }
+  .kpi:hover::before { opacity: 1; }
+  .kpi-label { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+  .kpi-value {
+    font-family: 'Syne', sans-serif;
+    font-size: 22px; font-weight: 800;
+    color: var(--text);
+  }
+  .kpi-value.green { color: var(--green); }
+  .kpi-value.gold { color: var(--gold); }
+  .kpi-value.red { color: var(--red); }
+  .kpi-sub { color: var(--muted); font-size: 10px; margin-top: 4px; }
+
+  /* ── SECTION HEADER ── */
+  .sec-head {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 16px;
+    font-family: 'Syne', sans-serif;
+    font-size: 13px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 2px;
+    color: var(--muted);
+  }
+  .sec-head::after {
+    content: ''; flex: 1; height: 1px;
+    background: var(--border);
+  }
+
+  /* ── LOTES TABLE ── */
+  .table-wrap {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 32px;
+  }
+  table { width: 100%; border-collapse: collapse; }
+  thead tr { background: var(--bg3); }
+  th {
+    padding: 12px 16px;
+    text-align: right;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+    font-weight: 500;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  th:first-child, th:nth-child(2) { text-align: left; }
+  td {
+    padding: 12px 16px;
+    text-align: right;
+    border-bottom: 1px solid rgba(26,58,82,0.4);
+    vertical-align: middle;
+    font-size: 12px;
+  }
+  td:first-child, td:nth-child(2) { text-align: left; }
+  tbody tr { transition: background .15s; }
+  tbody tr:hover { background: rgba(56,189,248,0.04); }
+  tbody tr:last-child td { border-bottom: none; }
+
+  .lote-id {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700; font-size: 14px;
+    color: var(--gold);
+  }
+  .badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 10px; border-radius: 20px;
+    font-size: 10px; font-weight: 600;
+    letter-spacing: .5px;
+  }
+  .badge-green { background: rgba(0,229,160,0.1); color: var(--green); border: 1px solid rgba(0,229,160,0.2); }
+  .badge-red   { background: rgba(255,77,109,0.1); color: var(--red);   border: 1px solid rgba(255,77,109,0.2); }
+  .badge-yellow{ background: rgba(255,209,102,0.1); color: var(--yellow); border: 1px solid rgba(255,209,102,0.2); }
+
+  .pnl-pos { color: var(--green); font-weight: 600; }
+  .pnl-neg { color: var(--red); font-weight: 600; }
+
+  .bar-wrap { display: flex; align-items: center; gap: 8px; }
+  .bar-bg { flex: 1; height: 4px; background: var(--bg3); border-radius: 2px; min-width: 60px; }
+  .bar-fill { height: 100%; border-radius: 2px; background: var(--green); transition: width .3s; }
+  .bar-fill.red { background: var(--red); }
+
+  /* tfoot totals */
+  tfoot tr { background: var(--bg3); }
+  tfoot td {
+    padding: 14px 16px;
+    border-top: 2px solid var(--border2);
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    color: var(--gold);
+    border-bottom: none;
+  }
+
+  /* ── TWO COL CHARTS ── */
+  .charts-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 32px;
+  }
+  .chart-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+  }
+  .chart-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 12px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 1.5px;
+    color: var(--muted);
+    margin-bottom: 20px;
+  }
+
+  /* ── BTC PRICE CHART (full width) ── */
+  .price-chart-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px;
+    margin-bottom: 32px;
+  }
+  .price-chart-header {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    margin-bottom: 24px;
+  }
+  .price-chart-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 16px; font-weight: 800;
+  }
+  .price-chart-sub { color: var(--muted); font-size: 11px; margin-top: 4px; }
+  .legend {
+    display: flex; gap: 20px; align-items: center;
+  }
+  .leg-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+  .leg-dot { width: 10px; height: 10px; border-radius: 50%; }
+
+  /* ── VENTAS TABLE ── */
+  /* ── MATH PANEL ── */
+  .math-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+  .math-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px;
+  }
+  .math-card-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 11px; font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase; letter-spacing: 1.5px;
+    margin-bottom: 16px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .math-row {
+    display: flex; justify-content: space-between;
+    padding: 7px 0;
+    border-bottom: 1px solid rgba(26,58,82,0.3);
+    font-size: 12px;
+  }
+  .math-row:last-child { border-bottom: none; }
+  .math-key { color: var(--muted); }
+  .math-val { font-weight: 600; color: var(--text); }
+  .math-val.accent { color: var(--gold); }
+  .math-val.green { color: var(--green); }
+  .math-val.red { color: var(--red); }
+
+  /* ── FOOTER ── */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 24px 0;
+    color: var(--muted);
+    font-size: 10px;
+    display: flex; justify-content: space-between;
+    text-transform: uppercase; letter-spacing: 1px;
+  }
+
+  /* TOOLTIP */
+  canvas { max-width: 100%; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap header-inner">
+    <div class="logo">
+      <div class="logo-icon">₿</div>
+      <div>
+        <div class="logo-text">BTC PORTFOLIO</div>
+        <div class="logo-sub">CONTABLE v2.0 · BINGX</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:32px;align-items:center;">
+      <div class="price-display" id="btcLive">BTC $68,000</div>
+      <div class="header-status"><div class="pulse"></div>PORTFOLIO ACTIVO</div>
+    </div>
+  </div>
+</header>
+
+<main>
+<div class="wrap">
+
+  <!-- ── KPIs ── -->
+  <div class="kpi-grid">
+    <div class="kpi">
+      <div class="kpi-label">💼 Portafolio Total</div>
+      <div class="kpi-value gold">$455,217</div>
+      <div class="kpi-sub">USDT equivalente</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">₿ BTC Disponible</div>
+      <div class="kpi-value">2.2536 BTC</div>
+      <div class="kpi-sub">= $153,246 USDT</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">💰 USDT Libre</div>
+      <div class="kpi-value gold">$301,971</div>
+      <div class="kpi-sub">= 4.44 BTC hoy</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">📈 P&amp;L Ventas</div>
+      <div class="kpi-value green">+$208,093</div>
+      <div class="kpi-sub">ROI total: ×1.66</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">⚖️ Breakeven</div>
+      <div class="kpi-value">$66,528</div>
+      <div class="kpi-sub">precio equilibrio</div>
+    </div>
+  </div>
+
+  <!-- ── LOTES ── -->
+  <div class="sec-head">Lotes de Compra</div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Lote</th>
+          <th>Fecha</th>
+          <th>Inversión (USDT)</th>
+          <th>Fee</th>
+          <th>Inversión Neta</th>
+          <th>Precio Compra</th>
+          <th>BTC Neto</th>
+          <th>BTC Disponible</th>
+          <th>Inv. Activa</th>
+          <th>Hoy Vale</th>
+          <th>PNL</th>
+          <th>% Activa</th>
+          <th>Estado</th>
+        </tr>
+      </thead>
+      <tbody id="lotesBody"></tbody>
+      <tfoot>
+        <tr>
+          <td colspan="2">TOTALES</td>
+          <td>$290,269.00</td>
+          <td>$101.59</td>
+          <td>$290,167.41</td>
+          <td>—</td>
+          <td>5.1821 ₿</td>
+          <td>2.2536 ₿</td>
+          <td>$149,928.74</td>
+          <td>$153,245.96</td>
+          <td class="pnl-pos">+$3,317.22</td>
+          <td>—</td>
+          <td>—</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <!-- ── CHART BTC PRECIO + COMPRAS ── -->
+  <div class="price-chart-card">
+    <div class="price-chart-header">
+      <div>
+        <div class="price-chart-title">📊 BTC/USDT — Historial de Compras</div>
+        <div class="price-chart-sub">Puntos de entrada en tiempo real · escala logarítmica sugerida</div>
+      </div>
+      <div class="legend">
+        <div class="leg-item"><div class="leg-dot" style="background:var(--gold)"></div>Precio BTC</div>
+        <div class="leg-item"><div class="leg-dot" style="background:var(--green)"></div>Compra ABIERTA</div>
+        <div class="leg-item"><div class="leg-dot" style="background:var(--red)"></div>Compra CERRADA</div>
+        <div class="leg-item"><div class="leg-dot" style="background:var(--yellow)"></div>Compra PARCIAL</div>
+      </div>
+    </div>
+    <canvas id="priceChart" height="340"></canvas>
+  </div>
+
+  <!-- ── CHARTS GRID ── -->
+  <div class="charts-grid">
+    <div class="chart-card">
+      <div class="chart-title">Distribución por Estado</div>
+      <canvas id="estadoChart" height="220"></canvas>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">PNL por Lote</div>
+      <canvas id="pnlChart" height="220"></canvas>
+    </div>
+  </div>
+
+  <!-- ── MATH PANEL ── -->
+  <div class="sec-head">Matemáticas del Portfolio</div>
+  <div class="math-grid">
+    <div class="math-card">
+      <div class="math-card-title">📐 Costo Promedio Ponderado</div>
+      <div class="math-row"><span class="math-key">Total invertido</span><span class="math-val">$290,269.00</span></div>
+      <div class="math-row"><span class="math-key">BTC total adquirido</span><span class="math-val">5.1821 ₿</span></div>
+      <div class="math-row"><span class="math-key">Precio promedio ponderado</span><span class="math-val accent">$56,013 / BTC</span></div>
+      <div class="math-row"><span class="math-key">BTC activo (sin vender)</span><span class="math-val">2.2536 ₿</span></div>
+      <div class="math-row"><span class="math-key">Costo base activo</span><span class="math-val">$149,928.74</span></div>
+      <div class="math-row"><span class="math-key">Precio promedio activo</span><span class="math-val accent">$66,528 / BTC</span></div>
+    </div>
+    <div class="math-card">
+      <div class="math-card-title">📈 Análisis de Rendimiento</div>
+      <div class="math-row"><span class="math-key">Ingresos por ventas</span><span class="math-val green">$333,337.29</span></div>
+      <div class="math-row"><span class="math-key">Costo de lo vendido</span><span class="math-val">$125,243.91</span></div>
+      <div class="math-row"><span class="math-key">Ganancia realizada</span><span class="math-val green">$208,093.38</span></div>
+      <div class="math-row"><span class="math-key">ROI realizado</span><span class="math-val green">×1.66 (166%)</span></div>
+      <div class="math-row"><span class="math-key">BTC latente vs costo</span><span class="math-val green">+2.21%</span></div>
+      <div class="math-row"><span class="math-key">Fee total pagado</span><span class="math-val">$218.30</span></div>
+    </div>
+    <div class="math-card">
+      <div class="math-card-title">🔭 Proyecciones</div>
+      <div class="math-row"><span class="math-key">BTC disponible</span><span class="math-val">2.2536 ₿</span></div>
+      <div class="math-row"><span class="math-key">Si BTC → $100k</span><span class="math-val accent">$225,360</span></div>
+      <div class="math-row"><span class="math-key">Si BTC → $150k</span><span class="math-val accent">$338,040</span></div>
+      <div class="math-row"><span class="math-key">Si BTC → $200k</span><span class="math-val accent">$450,720</span></div>
+      <div class="math-row"><span class="math-key">Pot. USDT libre → BTC (68k)</span><span class="math-val">4.44 ₿</span></div>
+      <div class="math-row"><span class="math-key">Total BTC si reinvierte</span><span class="math-val green">6.69 ₿</span></div>
+    </div>
+  </div>
+
+  <!-- ── VENTAS ── -->
+  <div class="sec-head">Historial de Ventas</div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Venta ID</th>
+          <th>Lote</th>
+          <th>Fecha</th>
+          <th>BTC Vendido</th>
+          <th>Precio Venta</th>
+          <th>USDT Bruto</th>
+          <th>Fee</th>
+          <th>USDT Neto</th>
+          <th>Costo Base</th>
+          <th>Ganancia</th>
+          <th>ROI</th>
+          <th>Días</th>
+        </tr>
+      </thead>
+      <tbody id="ventasBody"></tbody>
+      <tfoot>
+        <tr>
+          <td colspan="3">GLOBAL</td>
+          <td>2.6676 ₿</td>
+          <td>—</td>
+          <td>$333,454.00</td>
+          <td>$116.71</td>
+          <td>$333,337.29</td>
+          <td>$125,243.91</td>
+          <td class="pnl-pos">+$208,093.38</td>
+          <td class="pnl-pos">×1.66</td>
+          <td>—</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+</div><!-- /wrap -->
+</main>
+
+<footer>
+  <div class="wrap" style="display:flex;justify-content:space-between;width:100%">
+    <span>BTC PORTFOLIO CONTABLE v2.0 — BINGX</span>
+    <span id="lastUpdate">Actualizado: —</span>
+  </div>
+</footer>
+
+<script>
+/* ═══════════════════════════════════════════
+   DATA
+═══════════════════════════════════════════ */
+const LOTES = [
+  { id:1, fecha:'2024-01-23', inversion:67150.00, fee:23.50, invNeta:67126.50, precio:39500, btcNeto:1.699405, btcVendido:1.699405, btcDisp:0,        invActiva:0,           hoyVale:0,           pnl:2.163449,  estado:'CERRADO'    },
+  { id:2, fecha:'2024-03-20', inversion:15349.93, fee:5.37,  invNeta:15344.56, precio:62050, btcNeto:0.247293, btcVendido:0.247293, btcDisp:0,        invActiva:0,           hoyVale:0,           pnl:1.013799,  estado:'CERRADO'    },
+  { id:3, fecha:'2024-04-14', inversion:22999.44, fee:8.05,  invNeta:22991.39, precio:61000, btcNeto:0.376908, btcVendido:0.376908, btcDisp:0,        invActiva:0,           hoyVale:0,           pnl:1.048463,  estado:'CERRADO'    },
+  { id:'4a',fecha:'2024-05-01',inversion:15000.00, fee:5.25,  invNeta:14994.75, precio:57500, btcNeto:0.260860, btcVendido:0.260860, btcDisp:0,        invActiva:0,           hoyVale:0,           pnl:1.173152,  estado:'CERRADO'    },
+  { id:'4b',fecha:'2024-05-01',inversion:25999.80, fee:9.10,  invNeta:25990.70, precio:57500, btcNeto:0.452012, btcVendido:0.344026, btcDisp:0.107987, invActiva:6209.23,     hoyVale:7343.09,     pnl:0.182609,  estado:'PARCIAL'    },
+  { id:5,  fecha:'2024-10-01', inversion:63720.99, fee:22.30, invNeta:63698.69, precio:62300, btcNeto:1.022451, btcVendido:0,        btcDisp:1.022451, invActiva:63698.69,    hoyVale:69526.66,    pnl:0.091493,  estado:'DISPONIBLE' },
+  { id:6,  fecha:'2024-10-10', inversion:48566.09, fee:17.00, invNeta:48549.09, precio:60000, btcNeto:0.809152, btcVendido:0,        btcDisp:0.809152, invActiva:48549.09,    hoyVale:55022.30,    pnl:0.133333,  estado:'DISPONIBLE' },
+  { id:7,  fecha:'2025-10-30', inversion:1053.95,  fee:0.37,  invNeta:1053.58,  precio:107000,btcNeto:0.009847, btcVendido:0,        btcDisp:0.009847, invActiva:1053.58,     hoyVale:669.57,      pnl:-0.364486, estado:'DISPONIBLE' },
+  { id:8,  fecha:'2025-11-05', inversion:30428.80, fee:10.65, invNeta:30418.15, precio:100000,btcNeto:0.304181, btcVendido:0,        btcDisp:0.304181, invActiva:30418.15,    hoyVale:20684.34,    pnl:-0.320000, estado:'DISPONIBLE' },
+];
+
+const VENTAS = [
+  { id:'1944853369', lote:4,      fecha:'2025-07-14', btc:0.260860, precio:119693.66, bruto:31223.29, fee:10.93, neto:31212.36, costo:14994.75, ganancia:16217.61, roi:1.081553, dias:439 },
+  { id:'AGO-11 L1', lote:1,      fecha:'2025-08-11', btc:1.699405, precio:125000.00, bruto:212425.63,fee:74.35, neto:212351.28,costo:67126.50, ganancia:145224.78,roi:2.163449, dias:566 },
+  { id:'AGO-11 L2', lote:2,      fecha:'2025-08-11', btc:0.247293, precio:125000.00, bruto:30911.68, fee:10.82, neto:30900.86, costo:15344.56, ganancia:15556.30, roi:1.013799, dias:509 },
+  { id:'AGO-11 L3', lote:3,      fecha:'2025-08-11', btc:0.376908, precio:125000.00, bruto:47113.50, fee:16.49, neto:47097.01, costo:22991.39, ganancia:24105.62, roi:1.048463, dias:484 },
+  { id:'AGO-11 L4', lote:'4b',   fecha:'2025-08-11', btc:0.344026, precio:125000.00, bruto:43003.19, fee:15.05, neto:42988.14, costo:19781.47, ganancia:23206.67, roi:1.173152, dias:467 },
+];
+
+const fmt = (n, dec=2) => n.toLocaleString('es-AR', {minimumFractionDigits:dec, maximumFractionDigits:dec});
+const fmtU = n => '$' + fmt(n);
+const fmtB = n => fmt(n,6) + ' ₿';
+
+/* ── LOTES TABLE ── */
+const lotesBody = document.getElementById('lotesBody');
+LOTES.forEach(l => {
+  const estadoMap = {
+    'DISPONIBLE': '<span class="badge badge-green">🟢 DISPONIBLE</span>',
+    'CERRADO':    '<span class="badge badge-red">🔴 CERRADO</span>',
+    'PARCIAL':    '<span class="badge badge-yellow">🟡 PARCIAL</span>',
+  };
+  const pnlPct = l.pnl;
+  const pnlCls = pnlPct >= 0 ? 'pnl-pos' : 'pnl-neg';
+  const pnlSign = pnlPct >= 0 ? '+' : '';
+  const pnlStr = `${pnlSign}${(pnlPct*100).toFixed(2)}%`;
+
+  const invActivaPct = l.invActiva > 0 ? (l.invActiva / l.invNeta * 100).toFixed(1) : 0;
+  const barCls = l.pnl >= 0 ? '' : 'red';
+  const barW = Math.min(Math.abs(l.pnl * 100), 100).toFixed(1);
+
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><span class="lote-id">#${l.id}</span></td>
+    <td>${l.fecha}</td>
+    <td>${fmtU(l.inversion)}</td>
+    <td style="color:var(--muted)">$${fmt(l.fee)}</td>
+    <td>${fmtU(l.invNeta)}</td>
+    <td style="color:var(--blue)">${fmtU(l.precio)}</td>
+    <td>${fmtB(l.btcNeto)}</td>
+    <td style="color:var(--green)">${fmtB(l.btcDisp)}</td>
+    <td>${l.invActiva > 0 ? fmtU(l.invActiva) : '<span style="color:var(--muted)">—</span>'}</td>
+    <td>${l.hoyVale > 0 ? fmtU(l.hoyVale) : '<span style="color:var(--muted)">—</span>'}</td>
+    <td class="${pnlCls}">
+      <div class="bar-wrap">
+        <span>${pnlStr}</span>
+        <div class="bar-bg"><div class="bar-fill ${barCls}" style="width:${barW}%"></div></div>
+      </div>
+    </td>
+    <td style="color:var(--muted)">${invActivaPct > 0 ? invActivaPct+'%' : '—'}</td>
+    <td>${estadoMap[l.estado]}</td>
+  `;
+  lotesBody.appendChild(tr);
+});
+
+/* ── VENTAS TABLE ── */
+const ventasBody = document.getElementById('ventasBody');
+VENTAS.forEach(v => {
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td style="color:var(--muted);font-size:10px">${v.id}</td>
+    <td><span class="lote-id">#${v.lote}</span></td>
+    <td>${v.fecha}</td>
+    <td>${fmtB(v.btc)}</td>
+    <td style="color:var(--gold)">${fmtU(v.precio)}</td>
+    <td>${fmtU(v.bruto)}</td>
+    <td style="color:var(--muted)">$${fmt(v.fee)}</td>
+    <td>${fmtU(v.neto)}</td>
+    <td style="color:var(--muted)">${fmtU(v.costo)}</td>
+    <td class="pnl-pos">+${fmtU(v.ganancia)}</td>
+    <td class="pnl-pos">×${fmt(v.roi,3)}</td>
+    <td style="color:var(--muted)">${v.dias}d</td>
+  `;
+  ventasBody.appendChild(tr);
+});
+
+/* ════════════════════════════
+   CHART 1: BTC PRECIO + COMPRAS
+════════════════════════════ */
+// Simulated BTC price curve (key data points Jan2024 – Nov2025)
+const priceData = [
+  {x:'2024-01-01', y:44000},
+  {x:'2024-01-23', y:39500},
+  {x:'2024-02-15', y:52000},
+  {x:'2024-03-20', y:62050},
+  {x:'2024-04-01', y:71000},
+  {x:'2024-04-14', y:61000},
+  {x:'2024-05-01', y:57500},
+  {x:'2024-06-01', y:67000},
+  {x:'2024-07-01', y:63000},
+  {x:'2024-08-01', y:59000},
+  {x:'2024-09-01', y:58000},
+  {x:'2024-10-01', y:62300},
+  {x:'2024-10-10', y:60000},
+  {x:'2024-11-01', y:70000},
+  {x:'2024-12-01', y:97000},
+  {x:'2025-01-01', y:102000},
+  {x:'2025-02-01', y:95000},
+  {x:'2025-03-01', y:87000},
+  {x:'2025-04-01', y:83000},
+  {x:'2025-05-01', y:95000},
+  {x:'2025-06-01', y:105000},
+  {x:'2025-07-14', y:119693},
+  {x:'2025-08-11', y:125000},
+  {x:'2025-09-01', y:110000},
+  {x:'2025-10-01', y:108000},
+  {x:'2025-10-30', y:107000},
+  {x:'2025-11-05', y:100000},
+  {x:'2025-12-01', y:92000},
+  {x:'2026-01-01', y:85000},
+  {x:'2026-03-26', y:68000},
+];
+
+// Buy points
+const buyPoints = LOTES.map(l => ({
+  x: l.fecha,
+  y: l.precio,
+  estado: l.estado,
+  id: l.id,
+  btc: l.btcNeto,
+  inv: l.inversion
+}));
+
+const colorMap = { DISPONIBLE: '#00e5a0', CERRADO: '#ff4d6d', PARCIAL: '#ffd166' };
+
+const ctx1 = document.getElementById('priceChart').getContext('2d');
+new Chart(ctx1, {
+  type: 'line',
+  data: {
+    datasets: [
+      {
+        label: 'BTC/USDT',
+        data: priceData,
+        borderColor: 'rgba(245,166,35,0.9)',
+        borderWidth: 2,
+        backgroundColor: (ctx) => {
+          const gradient = ctx.chart.ctx.createLinearGradient(0,0,0,340);
+          gradient.addColorStop(0,'rgba(245,166,35,0.15)');
+          gradient.addColorStop(1,'rgba(245,166,35,0)');
+          return gradient;
+        },
+        fill: true,
+        tension: 0.4,
+        pointRadius: 0,
+        pointHoverRadius: 4,
+        parsing: { xAxisKey:'x', yAxisKey:'y' },
+        order: 2
+      },
+      ...['DISPONIBLE','CERRADO','PARCIAL'].map(estado => ({
+        label: estado,
+        data: buyPoints.filter(b=>b.estado===estado).map(b=>({x:b.x,y:b.y,raw:b})),
+        showLine: false,
+        pointRadius: 10,
+        pointHoverRadius: 14,
+        pointBackgroundColor: colorMap[estado],
+        pointBorderColor: '#050a0e',
+        pointBorderWidth: 2,
+        parsing: { xAxisKey:'x', yAxisKey:'y' },
+        order: 1
+      }))
+    ]
+  },
+  options: {
+    responsive: true,
+    interaction: { mode:'point', intersect:false },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: '#0d1e2d',
+        borderColor: '#1a3a52',
+        borderWidth: 1,
+        titleColor: '#f5a623',
+        bodyColor: '#e2f0fa',
+        padding: 12,
+        callbacks: {
+          label(ctx) {
+            if(ctx.dataset.label==='BTC/USDT') return `  BTC: $${ctx.parsed.y.toLocaleString()}`;
+            const r = ctx.raw.raw;
+            return [
+              `  Lote #${r.id} · ${r.estado}`,
+              `  Precio: $${r.y.toLocaleString()}`,
+              `  BTC: ${r.btc.toFixed(6)}`,
+              `  Inversión: $${r.inv.toLocaleString()}`
+            ];
+          }
+        }
+      }
+    },
+    scales: {
+      x: {
+        type:'category',
+        ticks: {
+          color:'#6b8fa8', font:{size:10},
+          maxTicksLimit: 10,
+          maxRotation: 0
+        },
+        grid: { color:'rgba(26,58,82,0.3)' }
+      },
+      y: {
+        ticks: {
+          color:'#6b8fa8', font:{size:10},
+          callback: v => '$' + (v/1000).toFixed(0)+'k'
+        },
+        grid: { color:'rgba(26,58,82,0.3)' }
+      }
+    }
+  }
+});
+
+/* ── CHART 2: Estado pie ── */
+const ctx2 = document.getElementById('estadoChart').getContext('2d');
+new Chart(ctx2, {
+  type:'doughnut',
+  data: {
+    labels: ['DISPONIBLE','CERRADO','PARCIAL'],
+    datasets: [{
+      data: [
+        LOTES.filter(l=>l.estado==='DISPONIBLE').reduce((s,l)=>s+l.inversion,0),
+        LOTES.filter(l=>l.estado==='CERRADO').reduce((s,l)=>s+l.inversion,0),
+        LOTES.filter(l=>l.estado==='PARCIAL').reduce((s,l)=>s+l.inversion,0),
+      ],
+      backgroundColor: ['#00e5a0','#ff4d6d','#ffd166'],
+      borderColor: '#050a0e',
+      borderWidth: 3,
+      hoverBorderWidth: 0,
+    }]
+  },
+  options: {
+    cutout:'70%',
+    plugins: {
+      legend: {
+        position:'bottom',
+        labels: { color:'#6b8fa8', font:{size:11}, padding:16, boxWidth:12 }
+      },
+      tooltip: {
+        backgroundColor:'#0d1e2d', borderColor:'#1a3a52', borderWidth:1,
+        titleColor:'#f5a623', bodyColor:'#e2f0fa', padding:10,
+        callbacks: { label: ctx => `  $${ctx.parsed.toLocaleString()} USDT` }
+      }
+    }
+  }
+});
+
+/* ── CHART 3: PNL por lote ── */
+const ctx3 = document.getElementById('pnlChart').getContext('2d');
+new Chart(ctx3, {
+  type:'bar',
+  data: {
+    labels: LOTES.map(l=>'#'+l.id),
+    datasets: [{
+      label: 'PNL %',
+      data: LOTES.map(l=>+(l.pnl*100).toFixed(2)),
+      backgroundColor: LOTES.map(l=>l.pnl>=0?'rgba(0,229,160,0.7)':'rgba(255,77,109,0.7)'),
+      borderColor:     LOTES.map(l=>l.pnl>=0?'#00e5a0':'#ff4d6d'),
+      borderWidth: 1,
+      borderRadius: 4,
+    }]
+  },
+  options: {
+    plugins: {
+      legend: { display:false },
+      tooltip: {
+        backgroundColor:'#0d1e2d', borderColor:'#1a3a52', borderWidth:1,
+        titleColor:'#f5a623', bodyColor:'#e2f0fa', padding:10,
+        callbacks: { label: ctx => `  PNL: ${ctx.parsed.y>0?'+':''}${ctx.parsed.y.toFixed(2)}%` }
+      }
+    },
+    scales: {
+      x: { ticks:{color:'#6b8fa8',font:{size:11}}, grid:{display:false} },
+      y: {
+        ticks:{color:'#6b8fa8',font:{size:10},callback:v=>v+'%'},
+        grid:{color:'rgba(26,58,82,0.3)'}
+      }
+    }
+  }
+});
+
+/* ── UPDATE DATE ── */
+document.getElementById('lastUpdate').textContent =
+  'Actualizado: ' + new Date().toLocaleString('es-AR');
+</script>
+</body>
+</html>
